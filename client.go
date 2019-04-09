@@ -16,6 +16,7 @@ import (
 
 const bodyType = "application/xml; charset=utf-8"
 
+// Client ...
 type Client struct {
 	account              *Account // 支付账号
 	signType             string   // 签名类型
@@ -37,14 +38,28 @@ func (c *Client) SetHttpConnectTimeoutMs(ms int) {
 	c.httpConnectTimeoutMs = ms
 }
 
+// SetHttpReadTimeoutMs ...
 func (c *Client) SetHttpReadTimeoutMs(ms int) {
 	c.httpReadTimeoutMs = ms
 }
 
+func (c *Client) newHttpClient() *http.Client {
+	return &http.Client{}
+	// porxyURL, _ := url.Parse("http://127.0.0.1:8888")
+	// return &http.Client{
+
+	// 	Transport: &http.Transport{
+	// 		Proxy: http.ProxyURL(porxyURL),
+	// 	},
+	// }
+}
+
+// SetSignType ...
 func (c *Client) SetSignType(signType string) {
 	c.signType = signType
 }
 
+// SetAccount ...
 func (c *Client) SetAccount(account *Account) {
 	c.account = account
 }
@@ -53,17 +68,17 @@ func (c *Client) SetAccount(account *Account) {
 func (c *Client) fillRequestData(params Params) Params {
 	params["appid"] = c.account.appID
 	params["mch_id"] = c.account.mchID
-	params["nonce_str"] = nonceStr()
+	params["nonce_str"] = NonceStr()
 	params["sign_type"] = c.signType
 	params["sign"] = c.Sign(params)
 	return params
 }
 
 // https no cert post
-func (c *Client) postWithoutCert(url string, params Params) (string, error) {
-	h := &http.Client{}
+func (c *Client) postWithoutCert(reqURL string, params Params) (string, error) {
+	h := c.newHttpClient()
 	p := c.fillRequestData(params)
-	response, err := h.Post(url, bodyType, strings.NewReader(MapToXml(p)))
+	response, err := h.Post(reqURL, bodyType, strings.NewReader(MapToXml(p)))
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +127,7 @@ func (c *Client) generateSignedXml(params Params) string {
 	return MapToXml(params)
 }
 
-// 验证签名
+// ValidSign 验证签名
 func (c *Client) ValidSign(params Params) bool {
 	if !params.ContainsKey(Sign) {
 		return false
@@ -120,8 +135,8 @@ func (c *Client) ValidSign(params Params) bool {
 	return params.GetString(Sign) == c.Sign(params)
 }
 
-// 签名
-func (c *Client) Sign(params Params) string {
+// SignByAPIKey 签名
+func SignByAPIKey(params Params, signType, apiKey string) string {
 	// 创建切片
 	var keys = make([]string, 0, len(params))
 	// 遍历签名参数
@@ -146,7 +161,7 @@ func (c *Client) Sign(params Params) string {
 	}
 	// 加入apiKey作加密密钥
 	buf.WriteString(`key=`)
-	buf.WriteString(c.account.apiKey)
+	buf.WriteString(apiKey)
 
 	var (
 		dataMd5    [16]byte
@@ -154,18 +169,23 @@ func (c *Client) Sign(params Params) string {
 		str        string
 	)
 
-	switch c.signType {
+	switch signType {
 	case MD5:
 		dataMd5 = md5.Sum(buf.Bytes())
 		str = hex.EncodeToString(dataMd5[:]) //需转换成切片
 	case HMACSHA256:
-		h := hmac.New(sha256.New, []byte(c.account.apiKey))
+		h := hmac.New(sha256.New, []byte(apiKey))
 		h.Write(buf.Bytes())
 		dataSha256 = h.Sum(nil)
 		str = hex.EncodeToString(dataSha256[:])
 	}
 
 	return strings.ToUpper(str)
+}
+
+// Sign 签名
+func (c *Client) Sign(params Params) string {
+	return SignByAPIKey(params, c.signType, c.account.apiKey)
 }
 
 // 处理 HTTPS API返回数据，转换成Map对象。return_code为SUCCESS时，验证签名。
@@ -319,6 +339,7 @@ func (c *Client) DownloadBill(params Params) (Params, error) {
 	}
 }
 
+// DownloadFundFlow ...
 func (c *Client) DownloadFundFlow(params Params) (Params, error) {
 	var url string
 	if c.account.isSandbox {
@@ -357,7 +378,7 @@ func (c *Client) Report(params Params) (Params, error) {
 	return c.processResponseXml(xmlStr)
 }
 
-// 转换短链接
+// ShortUrl 转换短链接
 func (c *Client) ShortUrl(params Params) (Params, error) {
 	var url string
 	if c.account.isSandbox {
@@ -372,7 +393,7 @@ func (c *Client) ShortUrl(params Params) (Params, error) {
 	return c.processResponseXml(xmlStr)
 }
 
-// 授权码查询OPENID接口
+// AuthCodeToOpenid 授权码查询OPENID接口
 func (c *Client) AuthCodeToOpenid(params Params) (Params, error) {
 	var url string
 	if c.account.isSandbox {

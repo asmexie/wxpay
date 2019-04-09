@@ -5,11 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"encoding/xml"
-	"golang.org/x/crypto/pkcs12"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/pkcs12"
 )
 
 func XmlToMap(xmlStr string) Params {
@@ -57,8 +58,8 @@ func MapToXml(params Params) string {
 	return buf.String()
 }
 
-// 用时间戳生成随机字符串
-func nonceStr() string {
+// NonceStr 用时间戳生成随机字符串
+func NonceStr() string {
 	return strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 }
 
